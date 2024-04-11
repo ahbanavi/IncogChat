@@ -70,8 +70,8 @@ function processMessage(array $message): string
             $metadata = createEncryptedMetadata($message['chat']['id'], $message['message_id']);
 
             $targetPlainUserId = decrypt($encryptedUserId);
-            sendMessage($targetPlainUserId, getMessage('new_message', [':metadata' => $metadata]));
-            copyMessage($targetPlainUserId, $message['chat']['id'], $message['message_id']);
+            $msgId = sendMessage($targetPlainUserId, getMessage('new_message', [':metadata' => $metadata]));
+            copyMessage($targetPlainUserId, $message['chat']['id'], $message['message_id'], $msgId);
 
             reactToMessage($message['chat']['id'], $message['message_id'], '👍');
         }
@@ -235,9 +235,9 @@ function getMessage(string $key, array $params = []): string
 {
     $messages = [
         'welcome' => "👋 Welcome! To generate a link, simply type the /link command.\n\n🔄 If you've arrived here via a link and it's your first time starting the bot, please click the link once more and send the written message. 📩",
-        'send' => "📝 To message the user, please respond directly to this message with your text. Your message will be sent anonymously! 🕵️‍♂️💬\n\n#send<a href=':metadata'>⁪</a>",
-        'new_message' => "📬 You've received a #new message!<a href=':metadata'>⁪</a> To reply, just respond to <b>THIS message</b> with your text.",
-        'new_reply' => "🔔 #New reply received!<a href=':metadata'>⁪</a> To continue the conversation, just reply to <b>THIS message</b> with your text.",
+        'send' => "📝 To message the user, please <b>reply directly to THIS message</b> with your text. Your message will be sent anonymously! 🕵️‍♂️💬\n\n#send<a href=':metadata'>⁪</a>",
+        'new_message' => "📬 You've received a #new message!<a href=':metadata'>⁪</a> To reply, just <b>reply to THIS message</b> with your text.",
+        'new_reply' => "🔔 #New reply received!<a href=':metadata'>⁪</a> To continue the conversation, just <b>reply to THIS message</b> with your text.",
         'invalid_url' => '⚠️ The URL you entered is invalid. Please check and try again!',
     ];
 
