@@ -1,11 +1,11 @@
 <?php
-# WIP: do not use it till I come with better encryption method to encrypt tg user id with less than 50 characters
-
 $env = parse_ini_file('.env');
 
 define('BOT_TOKEN', $env['BOT_TOKEN']);
-define("KEY", $env['KEY']);
 define("BOT_URL", $env['BOT_URL']);
+
+define("ENC_CIPHER", "aes-256-gcm");
+define("ENC_PASSPHRASE", $env['KEY']);
 
 
 // Get the incoming message from Telegram
@@ -18,90 +18,87 @@ if (isset($update['message'])) {
     // if message is '/start' then ask for user nick name to create a url for them
     $message = $update['message'];
     if ($message['text'] == '/start') {
-        sendMessage($message['chat']['id'], "Hello, please reply to this message with your nickname to create a url for you. \n\n#setNickName");
+        sendMessage($message['chat']['id'], "Hello, to get a link please use /link command. if you already here from a link and this is the first time you starting the bot, please open the link again and send the message.");
     }
 
     // check if the message is a reply to another message
     if (isset($message['reply_to_message'])) {
         $replyMessage = $message['reply_to_message'];
 
-        if (strpos($replyMessage['text'], '#setNickName') !== false) {
-            $nickName = $message['text'];
-            $encryptedUserId = encrypt($message['from']['id']);
-            $urlEncodedMsg = base64url_encode($encryptedUserId . '|' . $nickName);
-            $url = BOT_URL . '?start=msg' . $urlEncodedMsg;
-            sendMessage($message['chat']['id'], "Hello, your url is: $url");
-        }
-
-
-        // if reply message has #send{encryptedUserId}_{nickName} then send the message to the user with the nick name
+        // if reply message has #send{encryptedUserId} then send the message to the user with the nick name
         if (strpos($replyMessage["text"], "#send") !== false) {
-            // get everything after #send and before space
-            $encryptedUserId = explode("_", explode("#send", $replyMessage["text"])[1])[0];
+            $encryptedUserId = explode(BOT_URL . '/', $replyMessage["entities"][1]['url'])[1];
+
             $fromEncryptedUserId = encrypt($message['chat']['id']);
             // get message id of the current chat message 
             $messageId = $message['message_id'];
-            sendMessage(decrypt($encryptedUserId), "New Message #from_$fromEncryptedUserId, ($messageId), to reply, simply reply to this message: \n\n" . $message['text']);
+            $dummyUrl = BOT_URL . '/' . $fromEncryptedUserId . '/' . $messageId;
+            sendMessage(decrypt($encryptedUserId), "You have a new message #from <a href='{$dummyUrl}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text']);
+
             sendMessage($message['chat']['id'], "Your Message Sent Successfully!");
         }
 
-        if (strpos($replyMessage["text"], "#from_") !== false) {
-            $encryptedUserId = explode(",", explode("#from_", $replyMessage["text"])[1])[0];
-            $messageIdToReply = explode(")", explode("(", $replyMessage["text"])[1])[0];
+        if (strpos($replyMessage["text"], "#from") !== false) {
+            $encryptedUserId = explode('/', explode(BOT_URL . '/', $replyMessage["entities"][1]['url'])[1])[0];
+            $messageIdToReply = explode($encryptedUserId . '/', $replyMessage["entities"][1]['url'])[1];
             $fromEncryptedUserId = encrypt($message['chat']['id']);
             $messageId = $message['message_id'];
-            sendMessage(decrypt($encryptedUserId), "New Reply to your message #from_$fromEncryptedUserId, ($messageId): \n\n" . $message['text'], $messageIdToReply);
+            $dummyUrl = BOT_URL . '/' . $fromEncryptedUserId . '/' . $messageId;
+            sendMessage(decrypt($encryptedUserId), "New Reply to your message #from <a href='{$dummyUrl}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text'], $messageIdToReply);
             sendMessage($message['chat']['id'], "Your Message Sent Successfully!");
         }
 
     }
 
-    // check if message is '/start msg{EncryptedUserId}'}'
-    if (strpos($message['text'], '/start msg') === 0) {
-        $text = base64url_decode(str_replace('/start msg', '', $update['message']['text']));
 
-        // everything behind the last| is the encrypted user id and after it is nick name
-        $encryptedUserId = explode('|', $text)[0];
-        $nickName = explode('|', $text)[1];
+    if ($message['text'] == '/link') {
+        $encryptedUserId = encrypt($message['from']['id']);
+        $url = BOT_URL . '?text=/msg' . $encryptedUserId;
+        sendMessage($message['chat']['id'], "Hello, your url is: $url");
+    }
 
-        // send the message to user, with the nick name and encrypted user id inside it, and tell them to send the message to the {nickname} they sould reply to this message
-        sendMessage($update['message']['chat']['id'], "Hello, to send a message to $nickName, please reply to this message with your message. \n\n#send{$encryptedUserId}_{$nickName}");
+
+    // check if message is '/msg{EncryptedUserId}'}'
+    if (strpos($message['text'], '/msg') === 0) {
+        $encryptedUserId = str_replace('/msg', '', $update['message']['text']);
+
+        // send the message to user, with encrypted user id inside it, and tell them to send the message to the user they sould reply to this message
+        $dummyUrl = BOT_URL . '/' . $encryptedUserId;
+        sendMessage($update['message']['chat']['id'], "Hello, to send a message to the user, please reply to this message with your message. \n\n#send <a href='{$dummyUrl}'>⁪</a>");
     }
 }
 
-// Function to encrypt the user ID
-function decrypt($string)
+function encrypt($plaintext)
 {
-    $result = '';
-    $string = base64_decode($string);
-    for ($i = 0; $i < strlen($string); $i++) {
-        $char = substr($string, $i, 1);
-        $keychar = substr(KEY, ($i % strlen(KEY)) - 1, 1);
-        $char = chr(ord($char) - ord($keychar));
-        $result .= $char;
-    }
-    return $result;
+    $secret_key = hex2bin(ENC_PASSPHRASE);
+    $iv = openssl_random_pseudo_bytes(openssl_cipher_iv_length(ENC_CIPHER));
+    $tag = '';
+    $ciphertext = openssl_encrypt($plaintext, ENC_CIPHER, $secret_key, 0, $iv, $tag);
+
+    return base64url_encode($iv . $tag . $ciphertext);
 }
 
-// TODO: use another encryption method
-function encrypt($string)
+function decrypt($ciphertext)
 {
-    $result = '';
-    for ($i = 0; $i < strlen($string); $i++) {
-        $char = substr($string, $i, 1);
-        $keychar = substr(KEY, ($i % strlen(KEY)) - 1, 1);
-        $char = chr(ord($char) + ord($keychar));
-        $result .= $char;
-    }
-    return base64_encode($result);
+    $secret_key = hex2bin(ENC_PASSPHRASE);
+    $ciphertext = base64url_decode($ciphertext);
+    $ivlen = openssl_cipher_iv_length(ENC_CIPHER);
+    $iv = substr($ciphertext, 0, $ivlen);
+    $tag = substr($ciphertext, $ivlen, 16);
+    $ciphertext = substr($ciphertext, $ivlen + 16);
+
+    return openssl_decrypt($ciphertext, ENC_CIPHER, $secret_key, 0, $iv, $tag);
 }
+
+
 // Function to send a message using the Telegram bot API
 function sendMessage($chatId, $message, $replyToMessageId = null)
 {
     $url = "https://api.telegram.org/bot" . BOT_TOKEN . "/sendMessage";
     $data = [
         'chat_id' => $chatId,
-        'text' => $message
+        'text' => $message,
+        'parse_mode' => 'HTML',
     ];
 
     if ($replyToMessageId) {
@@ -122,12 +119,19 @@ function sendMessage($chatId, $message, $replyToMessageId = null)
     return $result;
 }
 
-function base64url_encode($data)
+// https://github.com/firebase/php-jwt/blob/e9690f56c0bf9cd670655add889b4e243e3ac576/src/JWT.php#L450C17-L450C82
+function base64url_encode($string)
 {
-    return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    return str_replace('=', '', strtr(base64_encode($string), '+/', '-_'));
 }
 
-function base64url_decode($data)
+// https://github.com/firebase/php-jwt/blob/e9690f56c0bf9cd670655add889b4e243e3ac576/src/JWT.php#L418
+function base64url_decode($string)
 {
-    return base64_decode(strtr($data, '-_', '+/') . str_repeat('=', 3 - (3 + strlen($data)) % 4));
+    $remainder = strlen($string) % 4;
+    if ($remainder) {
+        $padlen = 4 - $remainder;
+        $string .= str_repeat('=', $padlen);
+    }
+    return base64_decode(strtr($string, '-_', '+/'));
 }
