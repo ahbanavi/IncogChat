@@ -15,23 +15,26 @@ $update = json_decode($update, true);
 
 // Process the incoming message
 if (isset($update['message'])) {
-    processMessage($update['message']);
+    $rspMessage = processMessage($update['message']);
+
+    // Send the reply message to the user
+    if ($rspMessage !== '') {
+        sendMessage($update['message']['chat']['id'], $rspMessage, $update['message']['message_id']);
+    }
 }
 
 
-function processMessage($message)
+function processMessage(array $message): string
 {
     // if message is '/start' then ask for user nick name to create a url for them
     if ($message['text'] == '/start') {
-        sendMessage($message['chat']['id'], "Hello, to get a link please use /link command. if you already here from a link and this is the first time you starting the bot, please open the link again and send the message.");
-        return;
+        return "Hello, to get a link please use /link command. if you already here from a link and this is the first time you starting the bot, please open the link again and send the message.";
     }
 
     if ($message['text'] == '/link') {
         $encryptedUserId = encrypt($message['from']['id']);
         $url = BOT_URL . '?text=/msg' . $encryptedUserId;
-        sendMessage($message['chat']['id'], "Hello, your url is: $url");
-        return;
+        return "Your url is: <code>$url</code>";
     }
 
     // check if message is '/msg{EncryptedUserId}'}'
@@ -40,8 +43,7 @@ function processMessage($message)
 
         // send the message to user, with encrypted user id inside it, and tell them to send the message to the user they sould reply to this message
         $dummyUrl = BOT_URL . '/' . $encryptedUserId;
-        sendMessage($message['chat']['id'], "Hello, to send a message to the user, please reply to this message with your message. \n\n#send <a href='{$dummyUrl}'>⁪</a>");
-        return;
+        return "Hello, to send a message to the user, please reply to this message with your message. \n\n#send <a href='{$dummyUrl}'>⁪</a>";
     }
 
     // check if the message is a reply to another message from the bot
@@ -50,7 +52,7 @@ function processMessage($message)
 
         // chek if text is set, if not, end with 200
         if (!isset($replyMessage["text"])) {
-            return;
+            return '';
         }
 
         // if reply message has #send{encryptedUserId} then send the message to the user with the nick name
@@ -62,8 +64,8 @@ function processMessage($message)
             $messageId = $message['message_id'];
             $dummyUrl = BOT_URL . '/' . $fromEncryptedUserId . '/' . $messageId;
             sendMessage(decrypt($encryptedUserId), "You have a new message #from <a href='{$dummyUrl}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text']);
-            sendMessage($message['chat']['id'], "Your Message Sent Successfully!");
-            return;
+
+            return "Your Message Sent Successfully!";
         }
 
         if (strpos($replyMessage["text"], "#from") !== false) {
@@ -73,11 +75,12 @@ function processMessage($message)
             $messageId = $message['message_id'];
             $dummyUrl = BOT_URL . '/' . $fromEncryptedUserId . '/' . $messageId;
             sendMessage(decrypt($encryptedUserId), "New Reply to your message #from <a href='{$dummyUrl}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text'], $messageIdToReply);
-            sendMessage($message['chat']['id'], "Your Message Sent Successfully!");
-            return;
-        }
 
+            return "Your Message Sent Successfully!";
+        }
     }
+
+    return '';
 }
 
 function encrypt($plaintext)
