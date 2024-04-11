@@ -24,6 +24,24 @@ function processMessage($message)
     // if message is '/start' then ask for user nick name to create a url for them
     if ($message['text'] == '/start') {
         sendMessage($message['chat']['id'], "Hello, to get a link please use /link command. if you already here from a link and this is the first time you starting the bot, please open the link again and send the message.");
+        return;
+    }
+
+    if ($message['text'] == '/link') {
+        $encryptedUserId = encrypt($message['from']['id']);
+        $url = BOT_URL . '?text=/msg' . $encryptedUserId;
+        sendMessage($message['chat']['id'], "Hello, your url is: $url");
+        return;
+    }
+
+    // check if message is '/msg{EncryptedUserId}'}'
+    if (strpos($message['text'], '/msg') === 0) {
+        $encryptedUserId = str_replace('/msg', '', $message['text']);
+
+        // send the message to user, with encrypted user id inside it, and tell them to send the message to the user they sould reply to this message
+        $dummyUrl = BOT_URL . '/' . $encryptedUserId;
+        sendMessage($message['chat']['id'], "Hello, to send a message to the user, please reply to this message with your message. \n\n#send <a href='{$dummyUrl}'>⁪</a>");
+        return;
     }
 
     // check if the message is a reply to another message from the bot
@@ -44,8 +62,8 @@ function processMessage($message)
             $messageId = $message['message_id'];
             $dummyUrl = BOT_URL . '/' . $fromEncryptedUserId . '/' . $messageId;
             sendMessage(decrypt($encryptedUserId), "You have a new message #from <a href='{$dummyUrl}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text']);
-
             sendMessage($message['chat']['id'], "Your Message Sent Successfully!");
+            return;
         }
 
         if (strpos($replyMessage["text"], "#from") !== false) {
@@ -56,25 +74,9 @@ function processMessage($message)
             $dummyUrl = BOT_URL . '/' . $fromEncryptedUserId . '/' . $messageId;
             sendMessage(decrypt($encryptedUserId), "New Reply to your message #from <a href='{$dummyUrl}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text'], $messageIdToReply);
             sendMessage($message['chat']['id'], "Your Message Sent Successfully!");
+            return;
         }
 
-    }
-
-
-    if ($message['text'] == '/link') {
-        $encryptedUserId = encrypt($message['from']['id']);
-        $url = BOT_URL . '?text=/msg' . $encryptedUserId;
-        sendMessage($message['chat']['id'], "Hello, your url is: $url");
-    }
-
-
-    // check if message is '/msg{EncryptedUserId}'}'
-    if (strpos($message['text'], '/msg') === 0) {
-        $encryptedUserId = str_replace('/msg', '', $message['text']);
-
-        // send the message to user, with encrypted user id inside it, and tell them to send the message to the user they sould reply to this message
-        $dummyUrl = BOT_URL . '/' . $encryptedUserId;
-        sendMessage($message['chat']['id'], "Hello, to send a message to the user, please reply to this message with your message. \n\n#send <a href='{$dummyUrl}'>⁪</a>");
     }
 }
 
@@ -104,7 +106,6 @@ function decrypt($ciphertext)
 // Function to send a message using the Telegram bot API
 function sendMessage($chatId, $message, $replyToMessageId = null)
 {
-    $url = "https://api.telegram.org/bot" . BOT_TOKEN . "/sendMessage";
     $data = [
         'chat_id' => $chatId,
         'text' => $message,
@@ -115,16 +116,13 @@ function sendMessage($chatId, $message, $replyToMessageId = null)
         $data['reply_to_message_id'] = $replyToMessageId;
     }
 
-    $options = [
-        'http' => [
-            'method' => 'POST',
-            'header' => 'Content-Type: application/x-www-form-urlencoded',
-            'content' => http_build_query($data)
-        ]
-    ];
+    $ch = curl_init("https://api.telegram.org/bot" . BOT_TOKEN . "/sendMessage");
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
-    $context = stream_context_create($options);
-    $result = file_get_contents($url, false, $context);
+    $result = curl_exec($ch);
+    curl_close($ch);
 
     return $result;
 }
