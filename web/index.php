@@ -1,14 +1,12 @@
 <?php
-$env = parse_ini_file('.env');
-
 
 // Define the constants
-define('BOT_TOKEN', $env['BOT_TOKEN']);
-define("BOT_URL", $env['BOT_URL']);
-define("BOT_ID", $env['BOT_ID']);
+define('BOT_TOKEN', getenv('BOT_TOKEN'));
+define("BOT_URL", getenv('BOT_URL'));
+define("BOT_ID", getenv('BOT_ID'));
 
 define("ENC_CIPHER", "aes-256-gcm");
-define("ENC_PASSPHRASE", $env['KEY']); // openssl rand -hex 32
+define("ENC_PASSPHRASE", getenv('ENC_PASSPHRASE')); // openssl rand -hex 32
 
 
 // Get the incoming message from Telegram
