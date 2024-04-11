@@ -28,10 +28,9 @@ if (isset($update['message'])) {
 
 function processMessage(array $message): string
 {
-
     // Start message
     if ($message['text'] == '/start') {
-        return "Hello, to get a link please use /link command. if you already here from a link and this is the first time you starting the bot, please open the link again and send the message.";
+        return getMessage('welcome');
     }
 
     // Create a link for the user
@@ -49,12 +48,12 @@ function processMessage(array $message): string
         $plainUserId = decrypt($encryptedUserId);
 
         if (!$plainUserId) {
-            return "Invalid url!";
+            return getMessage('invalid_url');
         }
 
         // send the message to user, with encrypted user id inside it, and tell them to send the message to the user they sould reply to this message
         $metadata = createEncryptedMetadata($plainUserId);
-        return "Hello, to send a message to the user, please reply to this message with your message. \n\n#send <a href='{$metadata}'>⁪</a>";
+        return getMessage('send', [':metadata' => $metadata]);
     }
 
     // check if the message is a reply to another message from the bot
@@ -67,24 +66,28 @@ function processMessage(array $message): string
         }
 
         // Sending new message
-        if (strpos($replyMessage["text"], "#send") !== false) {
+        if (stripos($replyMessage["text"], "#send") !== false) {
             $encryptedUserId = explode(BOT_URL . '/', $replyMessage["entities"][1]['url'])[1];
 
             $metadata = createEncryptedMetadata($message['chat']['id'], $message['message_id']);
 
-            sendMessage(decrypt($encryptedUserId), "You have a new message #from <a href='{$metadata}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text']);
+            $targetPlainUserId = decrypt($encryptedUserId);
+            sendMessage($targetPlainUserId, getMessage('new_message', [':metadata' => $metadata]));
+            copyMessage($targetPlainUserId, $message['chat']['id'], $message['message_id']);
 
             reactToMessage($message['chat']['id'], $message['message_id'], '👍');
         }
 
         // Replying to a message
-        else if (strpos($replyMessage["text"], "#from") !== false) {
+        else if (stripos($replyMessage["text"], "#new") !== false) {
             $encryptedUserId = explode('/', explode(BOT_URL . '/', $replyMessage["entities"][1]['url'])[1])[0];
             $messageIdToReply = explode($encryptedUserId . '/', $replyMessage["entities"][1]['url'])[1];
 
             $metadata = createEncryptedMetadata($message['chat']['id'], $message['message_id']);
 
-            sendMessage(decrypt($encryptedUserId), "New Reply to your message #from <a href='{$metadata}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text'], $messageIdToReply);
+            $targetPlainUserId = decrypt($encryptedUserId);
+            $msgId = sendMessage($targetPlainUserId, getMessage('new_reply', [':metadata' => $metadata]), $messageIdToReply);
+            copyMessage($targetPlainUserId, $message['chat']['id'], $message['message_id'], $msgId);
 
             reactToMessage($message['chat']['id'], $message['message_id'], '👍');
         }
@@ -141,9 +144,36 @@ function sendMessage($chatId, $message, $replyToMessageId = null)
 
     if ($replyToMessageId) {
         $data['reply_to_message_id'] = $replyToMessageId;
+        $data['allow_sending_without_reply'] = true;
     }
 
-    return sendRequest($data, 'sendMessage');
+    $result = sendRequest($data, 'sendMessage');
+
+    $rsp = json_decode($result, true);
+    if ($rsp['ok']) {
+        return $rsp['result']['message_id'];
+    }
+
+    return null;
+}
+
+// forward ananymously all type of messages and files to the user
+function copyMessage($chatId, $fromChatId, $messageId, $replyTo = null)
+{
+    $data = [
+        'chat_id' => $chatId,
+        'from_chat_id' => $fromChatId,
+        'message_id' => $messageId,
+    ];
+
+    if ($replyTo) {
+        $data['reply_parameters'] = [
+            'message_id' => $replyTo,
+            'allow_sending_without_reply' => true,
+        ];
+    }
+
+    return sendRequest($data, 'copyMessage');
 }
 
 function reactToMessage($chatId, $messageId, $emoji)
@@ -194,4 +224,21 @@ function base64url_decode($string)
         $string .= str_repeat('=', $padlen);
     }
     return base64_decode(strtr($string, '-_', '+/'));
+}
+
+
+//                  >> messages section
+
+
+function getMessage(string $key, array $params = []): string
+{
+    $messages = [
+        'welcome' => "👋 Welcome! To generate a link, simply type the /link command.\n\n🔄 If you've arrived here via a link and it's your first time starting the bot, please click the link once more and send the written message. 📩",
+        'send' => "📝 To message the user, please respond directly to this message with your text. Your message will be sent anonymously! 🕵️‍♂️💬\n\n#send<a href=':metadata'>⁪</a>",
+        'new_message' => "📬 You've received a #new message!<a href=':metadata'>⁪</a> To reply, just respond to <b>THIS message</b> with your text.",
+        'new_reply' => "🔔 #New reply received!<a href=':metadata'>⁪</a> To continue the conversation, just reply to <b>THIS message</b> with your text.",
+        'invalid_url' => '⚠️ The URL you entered is invalid. Please check and try again!',
+    ];
+
+    return strtr($messages[$key], $params);
 }
