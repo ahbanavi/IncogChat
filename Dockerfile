@@ -1,7 +1,7 @@
 FROM php:apache
 
 WORKDIR /var/www/html
-COPY src .
+COPY web .
 
 ENV PORT=8000
 EXPOSE ${PORT}
