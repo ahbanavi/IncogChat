@@ -1,12 +1,14 @@
 <?php
 $env = parse_ini_file('.env');
 
+
+// Define the constants
 define('BOT_TOKEN', $env['BOT_TOKEN']);
 define("BOT_URL", $env['BOT_URL']);
 define("BOT_ID", $env['BOT_ID']);
 
 define("ENC_CIPHER", "aes-256-gcm");
-define("ENC_PASSPHRASE", $env['KEY']);
+define("ENC_PASSPHRASE", $env['KEY']); // openssl rand -hex 32
 
 
 // Get the incoming message from Telegram
@@ -26,24 +28,33 @@ if (isset($update['message'])) {
 
 function processMessage(array $message): string
 {
-    // if message is '/start' then ask for user nick name to create a url for them
+
+    // Start message
     if ($message['text'] == '/start') {
         return "Hello, to get a link please use /link command. if you already here from a link and this is the first time you starting the bot, please open the link again and send the message.";
     }
 
+    // Create a link for the user
     if ($message['text'] == '/link') {
         $encryptedUserId = encrypt($message['from']['id']);
         $url = BOT_URL . '?text=/msg' . $encryptedUserId;
         return "Your url is: <code>$url</code>";
     }
 
-    // check if message is '/msg{EncryptedUserId}'}'
+    // Check if the message is a command to send a message to a user
     if (strpos($message['text'], '/msg') === 0) {
         $encryptedUserId = str_replace('/msg', '', $message['text']);
 
+        // check if the user id is valid
+        $plainUserId = decrypt($encryptedUserId);
+
+        if (!$plainUserId) {
+            return "Invalid url!";
+        }
+
         // send the message to user, with encrypted user id inside it, and tell them to send the message to the user they sould reply to this message
-        $dummyUrl = BOT_URL . '/' . $encryptedUserId;
-        return "Hello, to send a message to the user, please reply to this message with your message. \n\n#send <a href='{$dummyUrl}'>⁪</a>";
+        $metadata = createEncryptedMetadata($plainUserId);
+        return "Hello, to send a message to the user, please reply to this message with your message. \n\n#send <a href='{$metadata}'>⁪</a>";
     }
 
     // check if the message is a reply to another message from the bot
@@ -55,26 +66,25 @@ function processMessage(array $message): string
             return '';
         }
 
-        // if reply message has #send{encryptedUserId} then send the message to the user with the nick name
+        // Sending new message
         if (strpos($replyMessage["text"], "#send") !== false) {
             $encryptedUserId = explode(BOT_URL . '/', $replyMessage["entities"][1]['url'])[1];
 
-            $fromEncryptedUserId = encrypt($message['chat']['id']);
-            // get message id of the current chat message 
-            $messageId = $message['message_id'];
-            $dummyUrl = BOT_URL . '/' . $fromEncryptedUserId . '/' . $messageId;
+            $metadata = createEncryptedMetadata($message['chat']['id'], $message['message_id']);
 
-            sendMessage(decrypt($encryptedUserId), "You have a new message #from <a href='{$dummyUrl}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text']);
+            sendMessage(decrypt($encryptedUserId), "You have a new message #from <a href='{$metadata}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text']);
 
             reactToMessage($message['chat']['id'], $message['message_id'], '👍');
-        } else if (strpos($replyMessage["text"], "#from") !== false) {
+        }
+
+        // Replying to a message
+        else if (strpos($replyMessage["text"], "#from") !== false) {
             $encryptedUserId = explode('/', explode(BOT_URL . '/', $replyMessage["entities"][1]['url'])[1])[0];
             $messageIdToReply = explode($encryptedUserId . '/', $replyMessage["entities"][1]['url'])[1];
-            $fromEncryptedUserId = encrypt($message['chat']['id']);
-            $messageId = $message['message_id'];
-            $dummyUrl = BOT_URL . '/' . $fromEncryptedUserId . '/' . $messageId;
 
-            sendMessage(decrypt($encryptedUserId), "New Reply to your message #from <a href='{$dummyUrl}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text'], $messageIdToReply);
+            $metadata = createEncryptedMetadata($message['chat']['id'], $message['message_id']);
+
+            sendMessage(decrypt($encryptedUserId), "New Reply to your message #from <a href='{$metadata}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text'], $messageIdToReply);
 
             reactToMessage($message['chat']['id'], $message['message_id'], '👍');
         }
@@ -83,6 +93,20 @@ function processMessage(array $message): string
     return '';
 }
 
+// Encrypt and create encrypt metadata for the message
+function createEncryptedMetadata($plainUserId, $messageId = null): string
+{
+    $dummyUrl = BOT_URL . '/' . encrypt($plainUserId);
+
+    if ($messageId) {
+        $dummyUrl .= '/' . $messageId;
+    }
+
+    return $dummyUrl;
+}
+
+
+//                          >ENCRYPTION FUNCTIONS
 function encrypt($plaintext)
 {
     $secret_key = hex2bin(ENC_PASSPHRASE);
@@ -106,7 +130,7 @@ function decrypt($ciphertext)
 }
 
 
-// Function to send a message using the Telegram bot API
+//                          >TELEGRAM API FUNCTIONS
 function sendMessage($chatId, $message, $replyToMessageId = null)
 {
     $data = [
@@ -152,6 +176,8 @@ function sendRequest($data, $method)
 
     return $result;
 }
+
+//                         >>OTHER UTILITIY FUNCTIONS
 
 // https://github.com/firebase/php-jwt/blob/e9690f56c0bf9cd670655add889b4e243e3ac576/src/JWT.php#L450C17-L450C82
 function base64url_encode($string)
