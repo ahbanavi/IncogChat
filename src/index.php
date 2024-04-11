@@ -3,6 +3,7 @@ $env = parse_ini_file('.env');
 
 define('BOT_TOKEN', $env['BOT_TOKEN']);
 define("BOT_URL", $env['BOT_URL']);
+define("BOT_ID", $env['BOT_ID']);
 
 define("ENC_CIPHER", "aes-256-gcm");
 define("ENC_PASSPHRASE", $env['KEY']);
@@ -12,18 +13,27 @@ define("ENC_PASSPHRASE", $env['KEY']);
 $update = file_get_contents('php://input');
 $update = json_decode($update, true);
 
-// Check if the message is valid
+// Process the incoming message
 if (isset($update['message'])) {
+    processMessage($update['message']);
+}
 
+
+function processMessage($message)
+{
     // if message is '/start' then ask for user nick name to create a url for them
-    $message = $update['message'];
     if ($message['text'] == '/start') {
         sendMessage($message['chat']['id'], "Hello, to get a link please use /link command. if you already here from a link and this is the first time you starting the bot, please open the link again and send the message.");
     }
 
-    // check if the message is a reply to another message
-    if (isset($message['reply_to_message'])) {
+    // check if the message is a reply to another message from the bot
+    if (isset($message['reply_to_message']) && $message['reply_to_message']['from']['id'] === (int) BOT_ID) {
         $replyMessage = $message['reply_to_message'];
+
+        // chek if text is set, if not, end with 200
+        if (!isset($replyMessage["text"])) {
+            return;
+        }
 
         // if reply message has #send{encryptedUserId} then send the message to the user with the nick name
         if (strpos($replyMessage["text"], "#send") !== false) {
@@ -60,11 +70,11 @@ if (isset($update['message'])) {
 
     // check if message is '/msg{EncryptedUserId}'}'
     if (strpos($message['text'], '/msg') === 0) {
-        $encryptedUserId = str_replace('/msg', '', $update['message']['text']);
+        $encryptedUserId = str_replace('/msg', '', $message['text']);
 
         // send the message to user, with encrypted user id inside it, and tell them to send the message to the user they sould reply to this message
         $dummyUrl = BOT_URL . '/' . $encryptedUserId;
-        sendMessage($update['message']['chat']['id'], "Hello, to send a message to the user, please reply to this message with your message. \n\n#send <a href='{$dummyUrl}'>⁪</a>");
+        sendMessage($message['chat']['id'], "Hello, to send a message to the user, please reply to this message with your message. \n\n#send <a href='{$dummyUrl}'>⁪</a>");
     }
 }
 
