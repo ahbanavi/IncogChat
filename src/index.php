@@ -63,20 +63,20 @@ function processMessage(array $message): string
             // get message id of the current chat message 
             $messageId = $message['message_id'];
             $dummyUrl = BOT_URL . '/' . $fromEncryptedUserId . '/' . $messageId;
+
             sendMessage(decrypt($encryptedUserId), "You have a new message #from <a href='{$dummyUrl}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text']);
 
-            return "Your Message Sent Successfully!";
-        }
-
-        if (strpos($replyMessage["text"], "#from") !== false) {
+            reactToMessage($message['chat']['id'], $message['message_id'], '👍');
+        } else if (strpos($replyMessage["text"], "#from") !== false) {
             $encryptedUserId = explode('/', explode(BOT_URL . '/', $replyMessage["entities"][1]['url'])[1])[0];
             $messageIdToReply = explode($encryptedUserId . '/', $replyMessage["entities"][1]['url'])[1];
             $fromEncryptedUserId = encrypt($message['chat']['id']);
             $messageId = $message['message_id'];
             $dummyUrl = BOT_URL . '/' . $fromEncryptedUserId . '/' . $messageId;
+
             sendMessage(decrypt($encryptedUserId), "New Reply to your message #from <a href='{$dummyUrl}'>⁪</a>a user, to reply, simply reply to this message: \n\n" . $message['text'], $messageIdToReply);
 
-            return "Your Message Sent Successfully!";
+            reactToMessage($message['chat']['id'], $message['message_id'], '👍');
         }
     }
 
@@ -119,9 +119,32 @@ function sendMessage($chatId, $message, $replyToMessageId = null)
         $data['reply_to_message_id'] = $replyToMessageId;
     }
 
-    $ch = curl_init("https://api.telegram.org/bot" . BOT_TOKEN . "/sendMessage");
+    return sendRequest($data, 'sendMessage');
+}
+
+function reactToMessage($chatId, $messageId, $emoji)
+{
+    $data = [
+        'chat_id' => $chatId,
+        'message_id' => $messageId,
+        'reaction' => [
+            [
+                'type' => 'emoji',
+                'emoji' => $emoji,
+            ]
+        ],
+        // 'is_big' => true,
+    ];
+
+    return sendRequest($data, 'setMessageReaction');
+}
+
+function sendRequest($data, $method)
+{
+    $ch = curl_init("https://api.telegram.org/bot" . BOT_TOKEN . "/{$method}");
     curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
     $result = curl_exec($ch);
