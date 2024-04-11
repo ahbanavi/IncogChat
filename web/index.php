@@ -138,6 +138,9 @@ function sendMessage($chatId, $message, $replyToMessageId = null)
         'chat_id' => $chatId,
         'text' => $message,
         'parse_mode' => 'HTML',
+        'link_preview_options' => [
+            'is_disabled' => true,
+        ]
     ];
 
     if ($replyToMessageId) {
