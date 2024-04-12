@@ -71,9 +71,13 @@ function processMessage(array $message): string
 
             $targetPlainUserId = decrypt($encryptedUserId);
             $msgId = sendMessage($targetPlainUserId, getMessage('new_message', [':metadata' => $metadata]));
-            copyMessage($targetPlainUserId, $message['chat']['id'], $message['message_id'], $msgId);
+            $isDelivered = copyMessage($targetPlainUserId, $message['chat']['id'], $message['message_id'], $msgId);
 
-            reactToMessage($message['chat']['id'], $message['message_id'], '👍');
+            if ($isDelivered) {
+                reactToMessage($message['chat']['id'], $message['message_id'], '👍');
+            } else {
+                return getMessage('not_delivered');
+            }
         }
 
         // Replying to a message
@@ -85,9 +89,13 @@ function processMessage(array $message): string
 
             $targetPlainUserId = decrypt($encryptedUserId);
             $msgId = sendMessage($targetPlainUserId, getMessage('new_reply', [':metadata' => $metadata]), $messageIdToReply);
-            copyMessage($targetPlainUserId, $message['chat']['id'], $message['message_id'], $msgId);
+            $isDelivered = copyMessage($targetPlainUserId, $message['chat']['id'], $message['message_id'], $msgId);
 
-            reactToMessage($message['chat']['id'], $message['message_id'], '👍');
+            if ($isDelivered) {
+                reactToMessage($message['chat']['id'], $message['message_id'], '👍');
+            } else {
+                return getMessage('not_delivered');
+            }
         }
     }
 
@@ -151,7 +159,7 @@ function sendMessage($chatId, $message, $replyToMessageId = null)
     $result = sendRequest($data, 'sendMessage');
 
     $rsp = json_decode($result, true);
-    if ($rsp['ok']) {
+    if ($rsp['ok'] ?? false) {
         return $rsp['result']['message_id'];
     }
 
@@ -159,7 +167,7 @@ function sendMessage($chatId, $message, $replyToMessageId = null)
 }
 
 // forward ananymously all type of messages and files to the user
-function copyMessage($chatId, $fromChatId, $messageId, $replyTo = null)
+function copyMessage($chatId, $fromChatId, $messageId, $replyTo = null): bool
 {
     $data = [
         'chat_id' => $chatId,
@@ -174,7 +182,11 @@ function copyMessage($chatId, $fromChatId, $messageId, $replyTo = null)
         ];
     }
 
-    return sendRequest($data, 'copyMessage');
+    $result = sendRequest($data, 'copyMessage');
+
+    $rsp = json_decode($result, true);
+
+    return $rsp['ok'] ?? false;
 }
 
 function reactToMessage($chatId, $messageId, $emoji)
@@ -188,7 +200,7 @@ function reactToMessage($chatId, $messageId, $emoji)
                 'emoji' => $emoji,
             ]
         ],
-        // 'is_big' => true,
+        'is_big' => true,
     ];
 
     return sendRequest($data, 'setMessageReaction');
@@ -239,6 +251,7 @@ function getMessage(string $key, array $params = []): string
         'new_message' => "📬 You've received a #new message!<a href=':metadata'>⁪</a> To reply, just <b>reply to THIS message</b> with your text/file/sticker/gif.",
         'new_reply' => "🔔 #New reply received!<a href=':metadata'>⁪</a> To continue the conversation, just <b>reply to THIS message</b> with your text/file/sticker/gif.",
         'invalid_url' => '⚠️ The URL you entered is invalid. Please check and try again!',
+        'not_delivered' => "❗ Your message couldn't be delivered. There might be a temporary problem, or the user may have blocked the bot. Please try again later.",
     ];
 
     return strtr($messages[$key], $params);
