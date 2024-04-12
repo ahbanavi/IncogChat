@@ -65,7 +65,7 @@ function processMessage(array $message): string
 
         // Sending new message
         if (stripos($replyMessage["text"], "#send") !== false) {
-            $encryptedUserId = explode(BOT_URL . '/', $replyMessage["entities"][1]['url'])[2];
+            $encryptedUserId = explode(BOT_URL . '/', $replyMessage["entities"][2]['url'])[1];
 
             $metadata = createEncryptedMetadata($message['chat']['id'], $message['message_id']);
 
