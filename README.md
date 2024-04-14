@@ -28,7 +28,7 @@ This way, the bot can facilitate anonymous messaging without storing any data or
 ## 🛡️ Trust and Security
 The only point of trust in this project is to trust the bot maintainer that they are using this same source as the robot backend. We have made every effort to ensure the security and privacy of the users, but it's important to note that the bot maintainer has the responsibility to maintain this trust, and if the maintainer want, they can even log the messages and user IDs for their own purposes.
 
-**In the worst-case scenario**, if the encryption key is leaked, the key holder can only access the user ID of people from whom they receive messages. If a user has not interacted with those user IDs on Telegram before, they cannot view their profiles. Access to profiles is only possible if the user IDs are part of a leaked Telegram database.
+**In the worst-case scenario**, if the encryption key is leaked, the key holder can only access the user ID of people from whom they receive messages. But if the key holder has not interacted with those user IDs on Telegram before, they cannot view their profiles. Keep in mind that Access to profiles could also be possible if the user IDs are part of a leaked Telegram information.
 
 ## ❗ Disclaimer
 This is a proof of concept project. While every effort has been made to ensure the security and privacy of the users, use this bot at your own risk. The developers will not be held responsible for any misuse or breach of data.
