@@ -1,6 +1,5 @@
 <?php
 
-// Define the constants
 define('BOT_TOKEN', getenv('BOT_TOKEN'));
 define("BOT_URL", getenv('BOT_URL'));
 define("BOT_ID", getenv('BOT_ID'));
@@ -49,7 +48,7 @@ function processMessage(array $message): string
             return getMessage('invalid_url');
         }
 
-        // send the message to user, with encrypted user id inside it, and tell them to send the message to the user they sould reply to this message
+        // send the message to user, with encrypted user id inside it
         $metadata = createEncryptedMetadata($plainUserId);
         return getMessage('send', [':metadata' => $metadata]);
     }
@@ -58,7 +57,7 @@ function processMessage(array $message): string
     if (isset($message['reply_to_message']) && $message['reply_to_message']['from']['id'] === (int) BOT_ID) {
         $replyMessage = $message['reply_to_message'];
 
-        // chek if text is set, if not, end with 200
+        // chek if text is set
         if (!isset($replyMessage["text"])) {
             return '';
         }
